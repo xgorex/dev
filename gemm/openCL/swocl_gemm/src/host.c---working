@@ -1,0 +1,309 @@
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <CL/cl.h>
+
+char *kernel1_vecadd = "__kernel void vecadd(__global int *A, __global int *C)  {int idx = get_global_id(0); C[idx] = A[idx];}";
+
+int main(){
+
+   cl_int status;
+   cl_uint numPlatforms;
+
+   cl_platform_id *platform; 
+
+   //get number of platforms
+   status = clGetPlatformIDs(0, NULL, &numPlatforms);
+
+   if(CL_SUCCESS == status){
+      printf("platforms counter:%d\n",numPlatforms);
+      platform =(cl_platform_id*) malloc(numPlatforms * sizeof(cl_platform_id));
+   }
+   status = clGetPlatformIDs(numPlatforms, platform, 0);
+
+   if(CL_SUCCESS == status){
+      printf("Got platforms ID\n");
+   }
+
+   //get platform infor: NAME
+   size_t namePlatformCount;
+
+   status = clGetPlatformInfo(
+            platform[0],
+            CL_PLATFORM_NAME,
+            0,
+            NULL,
+            &namePlatformCount
+         );
+
+   char *namePlatform;
+   if(CL_SUCCESS == status){
+      namePlatform = (char*)malloc(namePlatformCount * sizeof(char));
+   }
+   
+   status = clGetPlatformInfo(
+            platform[0],
+            CL_PLATFORM_NAME,
+            namePlatformCount,
+            namePlatform,
+            NULL
+         );
+   if(CL_SUCCESS == status){
+      printf("Platform name:%s\n",namePlatform);
+   }
+
+   //get number of devices
+   cl_uint numDevices;
+   cl_device_id *device;
+   status = clGetDeviceIDs(platform[0],CL_DEVICE_TYPE_CPU, 0, NULL, &numDevices);
+
+   if(CL_SUCCESS == status){
+      printf("Devices count:%d\n",numDevices);
+      device = (cl_device_id*)malloc(numDevices * sizeof(cl_device_id));
+   }
+
+
+   status = clGetDeviceIDs(platform[0],CL_DEVICE_TYPE_CPU, numDevices, device, NULL);
+   if(CL_SUCCESS == status){
+      printf("Got devices ID\n");
+   }
+
+   size_t infoDeviceSize;
+   status = clGetDeviceInfo(
+            device[0],
+            CL_DEVICE_TYPE,
+            0,
+            NULL,
+            &infoDeviceSize
+         ); 
+
+   //cl_device_type *paramValue;
+   cl_device_type paramValue;
+   if(CL_SUCCESS == status){
+      printf("[DEV] Got device type size:%zd\n",infoDeviceSize);
+      //paramValue = malloc(infoDeviceSize * sizeof(cl_device_type));
+   }
+
+   status = clGetDeviceInfo(
+            device[0],
+            CL_DEVICE_TYPE,
+            infoDeviceSize,
+            &paramValue,
+            NULL
+         ); 
+
+   if(CL_SUCCESS == status){
+      switch(paramValue){
+         case CL_DEVICE_TYPE_CPU:
+            printf("[DEV] Device type: CPU\n");
+            break;
+         case CL_DEVICE_TYPE_GPU:   
+            printf("[DEV] Device type: GPU\n");
+            break;
+         default:   
+            printf("[DEV] NO DEVICES QUERED !!!\n");
+      }
+   }   
+
+      //query maximum compute units on device
+   cl_uint paramValue_MAX_CUs;
+   status = clGetDeviceInfo(
+            device[0],
+            CL_DEVICE_MAX_COMPUTE_UNITS,
+            infoDeviceSize,
+            &paramValue_MAX_CUs,
+            NULL
+         ); 
+
+   if(CL_SUCCESS == status){
+      printf("[DEV] Max compute units:%d\n",paramValue_MAX_CUs);
+   }   
+
+     //query maximum WORK ITEM DIMENTION for device
+   cl_uint paramValue_WID;
+   status = clGetDeviceInfo(
+            device[0],
+            CL_DEVICE_MAX_COMPUTE_UNITS,
+            infoDeviceSize,
+            &paramValue_WID,
+            NULL
+         ); 
+
+   if(CL_SUCCESS == status){
+      printf("[DEV] Max work items dimention:%d\n",paramValue_WID);
+   }
+
+     //query maximum WORK ITEM SIZES for device
+   size_t paramValue_WIS;
+   //paramValue_WIS = (void*)malloc(2*sizeof(size_t*));
+
+
+   status = clGetDeviceInfo(
+            device[0],
+            CL_DEVICE_MAX_WORK_GROUP_SIZE,
+            infoDeviceSize,
+            &paramValue_WIS,
+            NULL
+         ); 
+
+   if(CL_SUCCESS == status){
+      printf("[DEV] Max work items size:%zd\n",paramValue_WIS);
+   }else{
+     if(CL_INVALID_DEVICE == status)printf("CL_INVALID_DEVICE\n");
+     if(CL_INVALID_VALUE == status)printf("CL_INVALID_VALUE\n");
+     if(CL_OUT_OF_RESOURCES == status)printf("CL_OUT_OF_RESOURCES\n");
+     if(CL_OUT_OF_HOST_MEMORY == status)printf("CL_OUT_OF_HOST_MEMORY\n");
+
+     return 2;
+   
+   }
+
+   //CREATE CONTEXT FOR FIRST POOL OF DEVICES
+   cl_context context; 
+   context = clCreateContext(
+           NULL,
+           numDevices,
+           device,
+           NULL,
+           NULL,
+           &status
+         );
+
+   cl_command_queue cmdQ;
+   cmdQ = clCreateCommandQueue(
+            context,
+            device[0],
+            0,
+            &status
+         );
+
+
+   int elements = 20;
+
+   size_t datasize = elements * sizeof(int);
+   int *sysBuffA;
+   sysBuffA = (int*)malloc(datasize);
+
+      for(int i =0; i<elements;i++)
+         sysBuffA[i]=i;
+
+   cl_mem bufferA;
+   bufferA = clCreateBuffer(
+            context,
+            CL_MEM_READ_ONLY,
+            datasize,
+            NULL,
+            &status
+         );
+
+   status = clEnqueueWriteBuffer(
+            cmdQ,
+            bufferA,
+            CL_TRUE,
+            0,
+            datasize,
+            sysBuffA,
+            0,
+            NULL,
+            NULL
+         );
+
+   int *sysBuffC;
+   sysBuffC = (int*)malloc(datasize);
+
+   cl_mem bufferC;
+   bufferC = clCreateBuffer(
+            context,
+            CL_MEM_WRITE_ONLY,
+            datasize,
+            NULL,
+            &status
+         );
+    // Create a program with source code
+    
+    cl_program program = clCreateProgramWithSource(
+            context,
+            1,
+            (const char**)&kernel1_vecadd,
+            NULL,
+            &status
+         ); 
+
+ // Build (compile) the program for the device
+ //
+    status = clBuildProgram(
+            program,
+            numDevices,
+            device,
+            NULL,
+            NULL,
+            NULL
+          );
+
+
+    // Create the vector addition kernel
+    //
+     cl_kernel kernel;
+     kernel = clCreateKernel(
+            program,
+            "vecadd",
+            &status
+          );
+
+   status = clSetKernelArg(
+            kernel,
+            0,
+            sizeof(cl_mem),
+            &bufferA
+          );
+
+   status = clSetKernelArg(
+            kernel,
+            1,
+            sizeof(cl_mem),
+            &bufferC
+          );
+
+//EXECUTION
+
+   // Define an index space (global work size) of work
+   //     // items for execution. A workgroup size (local work size)
+   //         // is not required, but can be used.
+   size_t globalWorkSize[1];
+   globalWorkSize[0] = elements;
+
+   status = clEnqueueNDRangeKernel(
+               cmdQ,
+               kernel,
+               1,
+               NULL,
+               globalWorkSize,
+               NULL,
+               0,
+               NULL,
+               NULL
+            );
+
+
+   clEnqueueReadBuffer(
+               cmdQ,
+               bufferC,
+               CL_TRUE,
+               0,
+               datasize,
+               sysBuffC,
+               0,
+               NULL,
+               NULL);
+
+   for(int i=0; i<elements;i++){
+      printf("Tablica C[%d]=%d\n",i,sysBuffC[i]);
+   
+   }
+
+
+
+   free(platform); 
+   free(device);
+   return 0;
+}

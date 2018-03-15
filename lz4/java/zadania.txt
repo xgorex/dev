@@ -1,0 +1,5 @@
+Zadania do wykonania:
+
+#1.
+Wykonaj projekt History Buffer. Aktualnie zwalidowany jest prosty mechanizmy FIFO. Brak pelnej implementacji.
+test
